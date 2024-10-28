@@ -1,5 +1,5 @@
 .vscode/
 yolov8x.pt/
-models/*
+models/
 myvenv/
-output_video/*
+output_video/
