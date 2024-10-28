@@ -1,0 +1,5 @@
+.vscode/
+yolov8x.pt/
+models/*
+myvenv/
+output_video/*
