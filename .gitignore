@@ -1,5 +1,4 @@
-.vscode/
-yolov8x.pt/
 models/
+output_videos/
+runs/detect/
 myvenv/
-output_video/
