@@ -1,4 +1,6 @@
 models/
 output_videos/
 runs/detect/
-myvenv/
+venv/
+.vscode/
+.env/
