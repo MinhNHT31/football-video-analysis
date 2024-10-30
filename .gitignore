@@ -1,6 +1,7 @@
-models/
-output_videos/
-runs/detect/
-venv/
-.vscode/
-.env/
+models
+output_videos
+runs/detect
+venv
+.vscode
+.env
+input_videos

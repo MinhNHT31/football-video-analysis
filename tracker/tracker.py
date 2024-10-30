@@ -1,10 +1,60 @@
 from ultralytics import YOLO
+from ViewTransformer.ViewTransformer import ViewTransformation
+from inference_sdk import InferenceHTTPClient
+from dotenv import load_dotenv
+
+import os
 import supervision as sv
+import numpy as np
+import cv2
+
+load_dotenv
+
+api_key = os.getenv("API_KEY")
 
 class Tracker:
     def __init__(self, model_path):
         self.model = YOLO(model_path)
         self.tracker = sv.ByteTrack()
+        self.keypoint_tracker =InferenceHTTPClient(
+                    api_url="https://detect.roboflow.com",
+                    api_key= api_key,
+                            )
+        
+        self.pitch_all_points = np.array([
+        (0, 0),
+        (0, 1450.0),
+        (0, 2584.0),
+        (0, 4416.0),
+        (0, 5550.0),
+        (0, 7000),
+        (550, 2584.0),
+        (550, 4416.0),
+        (1100, 3500.0),
+        (2015, 1450.0),
+        (2015, 2584.0),
+        (2015, 4416.0),
+        (2015, 5550.0),
+        (6000.0, 0),
+        (6000.0, 2585.0),
+        (6000.0, 4415.0),
+        (6000.0, 7000),
+        (9985, 1450.0),
+        (9985, 2584.0),
+        (9985, 4416.0),
+        (9985, 5550.0),
+        (10900, 3500.0),
+        (11450, 2584.0),
+        (11450, 4416.0),
+        (12000, 0),
+        (12000, 1450.0),
+        (12000, 2584.0),
+        (12000, 4416.0),
+        (12000, 5550.0),
+        (12000, 7000),
+        (5085.0, 3500.0),
+        (6915.0, 3500.0)
+        ])
 
     def detect_frame(self, frames):
         batch_size = 30
@@ -49,13 +99,37 @@ class Tracker:
             detection_with_tracker = self.tracker.update_with_detections(detection_supervision)
             tracks.append(detection_with_tracker)
 
-            
-
         return tracks, ball_tracks
 
+    def get_key_points(self, frames, tracks):
+
+        project_points = []
+
+        for frame, track in zip(frames, tracks):
+            # Get key points from the frames
+            result = self.keypoint_tracker.infer(frame, model_id="football-field-detection-f07vi/15")
+            keypoints = sv.KeyPoints.from_inference(result)
+
+            filter = keypoints.confidence > 0.5
+            # Get the keypoints of the pitch in the frame
+            frame_points = keypoints.xy[filter]
+            # frame_key_points = sv.KeyPoints(
+            #     xy= frame_points[np.newaxis, ...]
+            # )
+            # transform the key points to the pitch coordinate system
+            transform = ViewTransformation(
+                source = self.pitch_all_points[np.newaxis][filter],
+                target = frame_points,
+            )
+            # transform the key points of player and referee to the frame coordinate system
+            track_points = track.get_anchors_coordinates(sv.Position.BOTTOM_CENTER)
+            transformed_keypoints = transform.transform_points(points = track_points).astype(np.int32)
+            project_points.append(transformed_keypoints)
+
+        return project_points
 
 
-    def draw_annotator(self, frames, tracks, ball_tracks):
+    def draw_annotator(self, frames, tracks, ball_tracks, project_points):
         # For Ball
         triangle = sv.TriangleAnnotator(
                     color = sv.Color.from_hex('#3357FF'),
@@ -73,19 +147,22 @@ class Tracker:
         )
 
         annotated_frames = []
-        i = 0
-        for frame, track in zip(frames, tracks):
-            player = track
+        
+        for frame, track, ball_track, points in zip(frames, tracks, ball_tracks, project_points):
 
+            player = track
             labels= [f"{tracker_id}" for tracker_id in track.tracker_id]
+            
+            coordinates = [f"x: {x},y: {y}" for [x,y] in points]
 
             annotated_frame = frame.copy()
             annotated_frame = ellipsis.annotate(annotated_frame, player)
-            if ball_tracks[i] is not None:
-                annotated_frame = triangle.annotate(annotated_frame, ball_tracks[i])
-            annotated_frame = label_annotator.annotate(annotated_frame, track, labels)
+            if ball_track is not None:
+                annotated_frame = triangle.annotate(annotated_frame, ball_track)
+            #annotated_frame = label_annotator.annotate(annotated_frame, track, labels)
+            annotated_frame = label_annotator.annotate(annotated_frame, track, coordinates)
             annotated_frames.append(annotated_frame)
-            i += 1
+            
 
 
         return annotated_frames

@@ -1,6 +1,7 @@
 from utils import read_video, save_video
 from tracker import Tracker
 
+
 def main():
     # read video
     frames = read_video("input_videos/121364_0.mp4")
@@ -9,9 +10,11 @@ def main():
     tracker = Tracker("models/best.pt")
 
     tracked,ball_tracked = tracker.get_object_tracker(frames)
+    project_points = tracker.get_key_points(frames, tracked)
+
     
     # Draw bounding boxes
-    annotated_frames = tracker.draw_annotator(frames, tracked, ball_tracked)
+    annotated_frames = tracker.draw_annotator(frames, tracked, ball_tracked, project_points)
     frames = annotated_frames
 
     # save video
