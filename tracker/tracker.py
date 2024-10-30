@@ -2,6 +2,7 @@ from ultralytics import YOLO
 from ViewTransformer.ViewTransformer import ViewTransformation
 from inference_sdk import InferenceHTTPClient
 from dotenv import load_dotenv
+from collections import defaultdict, deque
 
 import os
 import supervision as sv
@@ -22,42 +23,42 @@ class Tracker:
                             )
         
         self.pitch_all_points = np.array([
-        (0, 0),
-        (0, 1450.0),
-        (0, 2584.0),
-        (0, 4416.0),
-        (0, 5550.0),
-        (0, 7000),
-        (550, 2584.0),
-        (550, 4416.0),
-        (1100, 3500.0),
-        (2015, 1450.0),
-        (2015, 2584.0),
-        (2015, 4416.0),
-        (2015, 5550.0),
-        (6000.0, 0),
-        (6000.0, 2585.0),
-        (6000.0, 4415.0),
-        (6000.0, 7000),
-        (9985, 1450.0),
-        (9985, 2584.0),
-        (9985, 4416.0),
-        (9985, 5550.0),
-        (10900, 3500.0),
-        (11450, 2584.0),
-        (11450, 4416.0),
-        (12000, 0),
-        (12000, 1450.0),
-        (12000, 2584.0),
-        (12000, 4416.0),
-        (12000, 5550.0),
-        (12000, 7000),
-        (5085.0, 3500.0),
-        (6915.0, 3500.0)
-        ])
+                                        (0.0, 0.0),
+                                        (0.0, 14.5),
+                                        (0.0, 25.84),
+                                        (0.0, 44.16),
+                                        (0.0, 55.5),
+                                        (0.0, 70.0),
+                                        (5.5, 25.84),
+                                        (5.5, 44.16),
+                                        (11.0, 35.0),
+                                        (20.15, 14.5),
+                                        (20.15, 25.84),
+                                        (20.15, 44.16),
+                                        (20.15, 55.5),
+                                        (60.0, 0.0),
+                                        (60.0, 25.85),
+                                        (60.0, 44.15),
+                                        (60.0, 70.0),
+                                        (99.85, 14.5),
+                                        (99.85, 25.84),
+                                        (99.85, 44.16),
+                                        (99.85, 55.5),
+                                        (109.0, 35.0),
+                                        (114.5, 25.84),
+                                        (114.5, 44.16),
+                                        (120.0, 0.0),
+                                        (120.0, 14.5),
+                                        (120.0, 25.84),
+                                        (120.0, 44.16),
+                                        (120.0, 55.5),
+                                        (120.0, 70.0),
+                                        (50.85, 35.0),
+                                        (69.15, 35.0)
+                                        ])
 
     def detect_frame(self, frames):
-        batch_size = 30
+        batch_size = 120
         detections = []
         # just for testing
         length = len(frames) 
@@ -147,24 +148,34 @@ class Tracker:
         )
 
         annotated_frames = []
+        # distance measurement
+        coordinates = defaultdict( lambda: deque(maxlen=30))
         
         for frame, track, ball_track, points in zip(frames, tracks, ball_tracks, project_points):
-
             player = track
-            labels= [f"{tracker_id}" for tracker_id in track.tracker_id]
+
+            IDs= [tracker_id for tracker_id in track.tracker_id]
             
-            coordinates = [f"x: {x},y: {y}" for [x,y] in points]
+            labels = []
+
+            for tracker_id, point in zip(IDs, points):
+                coordinates[tracker_id].append(point)
+                if len(coordinates[tracker_id]) < 30//2:
+                    labels.append(f"#{tracker_id}")
+                else:
+                    distances = np.linalg.norm(np.diff(coordinates[tracker_id], axis=0), axis=1)
+                    speed = np.mean(distances) * 30/100
+                    labels.append(f"#{tracker_id} {speed:.2f} m/s")
 
             annotated_frame = frame.copy()
             annotated_frame = ellipsis.annotate(annotated_frame, player)
+
             if ball_track is not None:
                 annotated_frame = triangle.annotate(annotated_frame, ball_track)
-            #annotated_frame = label_annotator.annotate(annotated_frame, track, labels)
-            annotated_frame = label_annotator.annotate(annotated_frame, track, coordinates)
+
+            annotated_frame = label_annotator.annotate(annotated_frame, track, labels)
             annotated_frames.append(annotated_frame)
             
-
-
         return annotated_frames
     
     
